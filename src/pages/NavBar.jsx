@@ -44,31 +44,17 @@ const NavBar = () => {
                             >
                                 EmergencyContact
                             </Link>
-                            <Link
-                                to="/UpdateReportStatus"
-                                className="hover:bg-red-700 px-3 py-2 rounded-md text-sm font-medium"
-                            >
-                                UpdateReportStatus
-                            </Link>
-                            <Link
-                                to="/media"
-                                className="hover:bg-red-700 px-3 py-2 rounded-md text-sm font-medium"
-                            >
-                                Media
-                            </Link>
                         </div>
                     </div>
 
                     {/* Auth buttons */}
                     <div className="hidden md:flex items-center space-x-4">
                         <Link to="Login">
-                            <button className="hover:bg-white hover:text-red-600 px-3 py-2 rounded-md text-sm font-medium">
+                            <button className="bg-white text-red-600 hover:bg-gray-200 px-3 py-2 rounded-md text-sm font-medium">
                                 Login
                             </button>
                         </Link>
-                        <button className="bg-white text-red-600 hover:bg-gray-200 px-3 py-2 rounded-md text-sm font-medium">
-                            Logout
-                        </button>
+                        
                     </div>
 
                     {/* Mobile hamburger */}

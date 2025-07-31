@@ -12,6 +12,7 @@ import LocationPage from "./components/locationMap.jsx";
 import EmergencyContact from "./pages/emergencycontacts.jsx";
 import { User } from "./pages/User.jsx";
 import { Login } from "./pages/Login.jsx";
+import ReportDetailPage from "./pages/details.jsx";
 import ReportForm from "./pages/report-form.jsx";
 import MainLayout from "./MainLayout.jsx"; // ensures the pages are wrapped  to include the fixed footer and bottom padding.
 
@@ -94,6 +95,10 @@ const router = createBrowserRouter([
         <MapPage />
       </MainLayout>
     ),
+  },
+  {
+    path: '/details',
+    element: <ReportDetailPage />
   },
 ]);
 
