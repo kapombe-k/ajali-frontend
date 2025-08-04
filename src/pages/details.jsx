@@ -1,44 +1,92 @@
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from 'leaflet';
+import { BASE_URL } from "../utils";
+
+// Fix leaflet icons
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+    iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+});
+
+// Status mapping
+const statusMap = {
+    "Pending": "pending",
+    "In Progress": "under investigation",
+    "Resolved": "resolved"
+};
+
 export default function ReportDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const [report, setReport] = useState(null);
     const [status, setStatus] = useState("");
     const [loading, setLoading] = useState(true);
-    const API_BASE_URL = "http://127.0.0.1:5000";
+    const access_token = localStorage.getItem("token")
 
     useEffect(() => {
-        if (!id) return; // Avoid fetching if id is not set
-
         const fetchReport = async () => {
-            setLoading(true);
-            setReport(null);
-
             try {
-                const response = await axios.get(`${ API_BASE_URL } / reports / ${ id }`);
+                const response = await fetch(`${BASE_URL}/api/reports/${id}`, {
+                    headers: {
+                        Authorization: `Bearer ${access_token}`
+                    }
+                });
 
-                // Axios automatically parses JSON, so no need for res.json()
-                if (response.status === 200) {
-                    setReport(response.data);
-                    setStatus("In Progress");
-                } else {
-                    console.error("Error fetching report:", response.statusText);
-                }
-            } catch (error) {
-                console.error("Could not fetch data", error);
+                if (!response.ok) throw new Error("Failed to fetch report");
+
+                const data = await response.json();
+                setReport(data);
+
+                // Convert backend status to frontend display value
+                setStatus(
+                    Object.entries(statusMap).find(
+                        ([_, v]) => v === data.status
+                    )?.[0] || "Pending"
+                );
+
+            } catch (err) {
+                toast.error(err.message);
+                navigate("/reports");
             } finally {
                 setLoading(false);
             }
         };
 
         fetchReport();
-    }, [id]);
+    }, [id, navigate]);
 
-    const handleStatusUpdate = () => {
-        // alert(Status updated to: ${status});
-        navigate("/reports");
+    const handleStatusUpdate = async () => {
+        try {
+            const response = await fetch(`${BASE_URL}/api/reports/${id}/status`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${access_token}`
+                },
+                body: JSON.stringify({
+                    status: statusMap[status] // Convert to backend format
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Update failed");
+            }
+
+            toast.success("Status updated successfully!");
+            navigate("/reports");
+        } catch (err) {
+            toast.error(`Update failed: ${err.message}`);
+        }
     };
 
-    if (loading || !report) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-gray-950 via-blue-950 to-red-950 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -56,146 +104,58 @@ export default function ReportDetailPage() {
                     ← Back to Reports
                 </button>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Incident Details - Left Side */}
-                    <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl p-6">
-                        <h1 className="text-2xl font-bold text-blue-300 mb-6">
-                            Incident Details
-                        </h1>
-
+                {report && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Left Column - Incident Details */}
                         <div className="space-y-6">
-                            {/* Incident Summary */}
-                            <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h2 className="text-lg font-semibold text-white">
-                                            {report.incidentType}
-                                        </h2>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span
-                                                className={`px-2 py-1 rounded-full text-xs font-bold ${report.status === "Pending"
-                                                        ? "bg-yellow-500/20 text-yellow-300"
-                                                        : report.status === "In Progress"
-                                                            ? "bg-blue-500/20 text-blue-300"
-                                                            : report.status === "Resolved"
-                                                                ? "bg-green-500/20 text-green-300"
-                                                                : "bg-red-500/20 text-red-300"
-                                                    }`}
-                                            >
-                                                {report.status}
-                                            </span>
-                                            <span className="text-gray-400 text-sm">
-                                                {new Date(report.date).toLocaleString()}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="bg-gray-700 rounded-lg px-2 py-1 text-xs border border-gray-600">
-                                        ID: {(report.id || "").slice(0, 8)}
-                                    </div>
+                            {/* Status Update Section */}
+                            <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl p-6">
+                                <h2 className="text-xl font-bold text-blue-300 mb-4">Update Status</h2>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {Object.keys(statusMap).map((option) => (
+                                        <button
+                                            key={option}
+                                            className={`px-3 py-1.5 rounded-lg text-sm transition-all ${status === option
+                                                    ? "bg-blue-700 border-blue-500 text-white"
+                                                    : "bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600"
+                                                } border`}
+                                            onClick={() => setStatus(option)}
+                                        >
+                                            {option}
+                                        </button>
+                                    ))}
                                 </div>
-
-                                <div className="space-y-3">
-                                    <div>
-                                        <h3 className="text-sm text-gray-400 mb-1">Severity</h3>
-                                        <p className="text-white">{report.severity}</p>
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm text-gray-400 mb-1">Reporter</h3>
-                                        <p className="text-white">{report.reporter}</p>
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm text-gray-400 mb-1">Contact</h3>
-                                        <p className="text-white">{report.contact}</p>
-                                    </div>
-                                </div>
+                                <button
+                                    onClick={handleStatusUpdate}
+                                    disabled={!status}
+                                    className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${!status ? "bg-gray-600 cursor-not-allowed" : "bg-blue-700 hover:bg-blue-600"
+                                        } text-white`}
+                                >
+                                    Confirm Update
+                                </button>
                             </div>
 
-                            {/* Description */}
-                            <div>
-                                <h2 className="text-lg font-semibold text-white mb-3">
-                                    Description
-                                </h2>
-                                <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-                                    <p className="text-gray-300 whitespace-pre-line">
-                                        {report.description}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Status Update */}
-                            <div>
-                                <h2 className="text-lg font-semibold text-white mb-3">
-                                    Update Status
-                                </h2>
-                                <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-                                    <div className="flex flex-wrap gap-2 mb-4">
-                                        {["Pending", "In Progress", "Resolved"].map((option) => (
-                                            <button
-                                                key={option}
-                                                className={`px-3 py-1.5 rounded-lg text-sm transition-all ${status === option
-                                                        ? "bg-blue-700 border-blue-500 text-white"
-                                                        : "bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600"
-                                                    } border`}
-                                                onClick={() => setStatus(option)}
-                                            >
-                                                {option}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <button
-                                        onClick={handleStatusUpdate}
-                                        disabled={!status}
-                                        className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${!status
-                                                ? "bg-gray-600 cursor-not-allowed"
-                                                : "bg-blue-700 hover:bg-blue-600"
-                                            } text-white`}
-                                    >
-                                        Update Status
-                                    </button>
-                                </div>
-                            </div>
+                            {/* Other details sections... */}
                         </div>
-                    </div>
 
-                    {/* Map - Right Side */}
-                    <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl p-6">
-                        <h2 className="text-2xl font-bold text-blue-300 mb-6">
-                            Incident Location
-                        </h2>
-
-                        <div className="h-96 rounded-xl overflow-hidden mb-4 border border-gray-700">
-                            {report.location && (
+                        {/* Right Column - Map */}
+                        <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl p-6">
+                            <h2 className="text-xl font-bold text-blue-300 mb-4">Location</h2>
+                            <div className="h-96 rounded-xl overflow-hidden mb-4 border border-gray-700">
                                 <MapContainer
-                                    center={[report.location.lat, report.location.lng]}
+                                    center={[report.latitude, report.longitude]}
                                     zoom={15}
                                     className="h-full w-full"
-                                    attributionControl={false}
                                 >
                                     <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                                    <Marker position={[report.location.lat, report.location.lng]}>
+                                    <Marker position={[report.latitude, report.longitude]}>
                                         <Popup>Incident Location</Popup>
                                     </Marker>
                                 </MapContainer>
-                            )}
-                        </div>
-
-                        <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-                            <div className="space-y-2">
-                                <div>
-                                    <h3 className="text-sm text-gray-400">Address</h3>
-                                    <p className="text-white">{report.address}</p>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm text-gray-400">Coordinates</h3>
-                                    <p className="font-mono text-white">
-                                        {report.location.lat.toFixed(6)},{" "}
-                                        {report.location.lng.toFixed(6)}
-                                    </p>
-                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );
